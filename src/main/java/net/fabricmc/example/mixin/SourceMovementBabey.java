@@ -129,6 +129,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
                 this.setSprinting(true);
             }
         }
+        this.world.getProfiler().push("travel");
         if (this.noClip){
             this.fullNoClipMove(SV_NOCLIPSPEED, SV_NOCLIPACCELERATE);
         } else if (this.getAbilities().flying) {
@@ -140,6 +141,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         } else if (this.isSpectator()) {
             //this.fullObserverMove();
         }
+        this.world.getProfiler().pop();
         /*TODO figure out sprinting
         if (!this.isSprinting() && (!this.isTouchingWater() || this.isSubmergedInWater()) && this.isWalking() && canSprint && !this.isUsingItem() && !this.hasStatusEffect(StatusEffects.BLINDNESS) && this.client.options.keySprint.isPressed()) {
             this.setSprinting(true);
@@ -285,12 +287,10 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             this.world.getProfiler().pop();
         }
         this.world.getProfiler().pop();
+
         this.world.getProfiler().push("jump");
-
         this.world.getProfiler().pop();
-        this.world.getProfiler().push("travel");
 
-        this.world.getProfiler().pop();
         this.world.getProfiler().push("freezing");
         boolean bl2 = this.getType().isIn(EntityTypeTags.FREEZE_HURTS_EXTRA_TYPES);
         int m;
@@ -367,11 +367,11 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
     SOURCE
      */
     @Unique
-    private static final float SV_MAXSPEED = 320F * 0.01905F; // Conversion from source units to meters
+    private static final float SV_MAXSPEED = 320F * 0.01905F * 0.333333333F; // Conversion from source units to meters. Divided by three because one source meter is like, about 3 blocks.
     @Unique
     private static final float SV_NOCLIPSPEED = 5F;
     @Unique
-    private static final float SV_NOCLIPACCELERATE = 0F; // Default 5, except TODO only 0 is properly functional ATM.
+    private static final float SV_NOCLIPACCELERATE = 5F;
     @Unique
     private static final float SV_FRICTION = 1.0F; // 1.0F is no friction. 0.0F is instant stop.
     @Unique
@@ -384,12 +384,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         float wishspeed;
         float maxspeed = SV_MAXSPEED * factor;
 
-        // TODO Don't know what these represent
-        boolean mv_m_nButtons = true;
-        boolean IN_SPEED = false;
-
-        // This should probably be activated when shifting instead.
-        if (mv_m_nButtons & IN_SPEED) {
+        if (!this.input.sneaking) {
             factor /= 2.0f;
         }
 
@@ -403,20 +398,17 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         float umove = (float) (this.input.movementForward * -Math.sin(this.getPitch() * 0.017453292F) * factor);
 
         // Convert basis from forward-facing to absolute
-        float xFactor = MathHelper.sin(this.getYaw() * 0.017453292F);
-        float yFactor = MathHelper.cos(this.getYaw() * 0.017453292F);
+        float sine = MathHelper.sin(this.getYaw() * 0.017453292F);
+        float cosine = MathHelper.cos(this.getYaw() * 0.017453292F);
 
-        wishvel = new Vec3d(smove * (double)yFactor - fmove * (double)xFactor, umove, fmove * (double)yFactor + smove * (double)xFactor);
+        wishvel = new Vec3d(smove * cosine - fmove * sine, umove, fmove * cosine + smove * sine);
 
-        wishdir = wishvel;   // Determine maginitude of speed of move // **magnitude
-        wishspeed = (float) wishdir.length();
-        wishdir.normalize();
+        wishdir = wishvel.normalize();   // Determine maginitude of speed of move // **magnitude
+        wishspeed = (float) wishvel.length();
 
-        //
         // Clamp to server defined max speed
-        //
         if (wishspeed > maxspeed ) {
-            wishvel = wishvel.multiply(maxspeed/wishspeed);
+            wishvel = wishdir.multiply(maxspeed);
             wishspeed = maxspeed;
         }
 
@@ -424,8 +416,8 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             // Set pmove velocity
             this.accelerate(wishdir, wishspeed, maxacceleration);
 
-            float spd = (float) this.getVelocity().length();
-            if (spd < 0.01905f) {
+            float spd = (float) this.getVelocity().lengthSquared();
+            if (spd < 0.01905f * 0.01905f) {
                 this.setVelocity(Vec3d.ZERO);
                 return;
             }
@@ -446,6 +438,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             // Determine proportion of old speed we are using.
             newspeed /= spd;
             this.setVelocity(this.getVelocity().multiply(newspeed));
+            this.velocityDirty = true;
         } else {
             this.setVelocity(wishvel);
         }
