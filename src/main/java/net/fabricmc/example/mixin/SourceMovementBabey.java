@@ -389,6 +389,49 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
     private float player_m_surfaceFriction = 1.0F;
     @Unique
     private float GAMEMOVEMENT_JUMP_HEIGHT;
+    @Unique
+    private static final float SV_ACCELERATE = 5.5F; //
+    @Unique
+    private static final float SV_STOPSPEED = 80F;
+    @Unique
+    private static final float SV_AIRACCELERATE = 150F; // varies game to game. 150 is apparently TF's default.
+    @Unique
+    private float gravity;
+    @Unique
+    private float getGravity() {
+        return gravity;
+    }
+    @Unique
+    private static float getCurrentGravity() { return 600F; }
+    @Unique
+    private Vec3d m_vecWaterJumpVel = Vec3d.ZERO;
+    @Unique
+    private Vec3d m_outJumpVel = Vec3d.ZERO;
+    // TODO determine all of these
+    @Unique
+    private float m_outStepHeight = 0;
+    @Unique
+    private static final float WATERJUMP_HEIGHT = 0;
+    @Unique
+    private float m_flClientMaxSpeed = 0;
+    @Unique
+    private float m_flUpMove = 0;
+    @Unique
+    private final float m_flMaxSpeed = 0;
+    @Unique
+    private static final float PLAYER_FALL_PUNCH_THRESHOLD = 0;
+    @Unique
+    private float m_Local_m_flStepSize = 0;
+    @Unique
+    private float m_Local_m_flFallVelocity = 0;
+    @Unique
+    private Vec3d m_outWishVel = Vec3d.ZERO;
+    @Unique
+    private boolean m_Local_m_bAllowAutoMovement = false;
+    @Unique
+    private Vec3d getBaseVelocity() {
+        return Vec3d.ZERO;
+    }
 
     @Unique
     private void fullNoClipMove(float factor, float maxacceleration) {
@@ -519,19 +562,19 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
     public void startGravity() {
         float ent_gravity;
 
-        if (this.getGravity())
+        if (this.getGravity() != 0)
             ent_gravity = this.getGravity();
         else
             ent_gravity = 1.0F;
 
         // Add gravity so they'll be in the correct position during movement
         // yes, this 0.5 looks wrong, but it's not.
-        this.setVelocity(this.getVelocity().add(0, -ent_gravity * this.getCurrentGravity() * 0.5 * deltaTime(), 0));
-        this.setVelocity(this.getVelocity().add(0, this.getBaseVelocity().getY() * this.deltaTime()), 0);
+        this.setVelocity(this.getVelocity().add(0, -ent_gravity * getCurrentGravity() * 0.5 * deltaTime(), 0));
+        //this.setVelocity(this.getVelocity().add(0, this.getBaseVelocity().getY() * this.deltaTime()), 0);
 
-        Vec3d temp = this.getBaseVelocity();
-        temp = temp.multiply(1F, 0F, 1F);
-        this.setBaseVelocity(temp);
+        //Vec3d temp = this.getBaseVelocity();
+        //temp = temp.multiply(1F, 0F, 1F);
+        //this.setBaseVelocity(temp);
 
         this.checkVelocity();
     }
@@ -551,17 +594,9 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
 
         if (this.m_flWaterJumpTime <= 0 || !this.touchingWater) {
             this.m_flWaterJumpTime = 0;
-            this.removeFlag( FL_WATERJUMP );
         }
 
         this.setVelocity(this.getVelocity().add(this.m_vecWaterJumpVel.multiply(1F, 0F, 1F)));
-    }
-
-    @Unique
-    public boolean surroundedOnAllSides() {
-        for (VoxelShape blockCollision : this.world.getBlockCollisions(this, pm)) {
-            if bloc
-        }
     }
 
     @Unique
@@ -590,7 +625,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         // If we are in the water most of the way...
         if (this.waistDeepInWater) {
             // swimming, not jumping
-            this.setGroundEntity(null);
+            this.onGround = false;
 
             if(this.world.getFluidState(new BlockPos(this.getBoundingBox().getCenter())).isIn(FluidTags.WATER))    // We move up a certain amount
                 this.setVelocity(this.getVelocity().add(0F, 100F, 0F));
@@ -609,7 +644,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         }
 
         // No more effect
-        if (this.getGroundEntity() == null)
+        if (!this.onGround)
         {
             //mv->m_nOldButtons |= IN_JUMP;
             return false;		// in air, so no effect
@@ -635,7 +670,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             return false;
 
         // In the air now.
-        this.setGroundEntity(null);
+        this.onGround = false;
 
         this.playStepSound(new BlockPos(this.getPos()), this.world.getBlockState(new BlockPos(this.getPos().subtract(0F, 1F, 0F))));
 //
@@ -648,12 +683,12 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
 //        }
 
         float flMul;
-        if ( g_bMovementOptimizations ) {
+        /*if ( g_bMovementOptimizations ) {
             assert (this.getCurrentGravity() == 800.0f );
             flMul = 268.3281572999747f;
-        } else {
-            flMul = sqrt(2 * this.getCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
-        }
+        } else {*/
+            flMul = (float) Math.sqrt(2 * getCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
+        //}
 
         // Acclerate upward
         // If we are ducking...
@@ -675,7 +710,8 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
 
         this.finishGravity();
 
-        CheckV( player->CurrentCommandNumber(), "CheckJump", mv->m_vecVelocity );
+        // Some debug thing I think. Probably unimportant
+        // CheckV( player->CurrentCommandNumber(), "CheckJump", mv->m_vecVelocity );
 
         this.m_outJumpVel = this.m_outJumpVel.add(0, this.getVelocity().y - startz, 0);
         this.m_outStepHeight += 0.15f;
@@ -780,13 +816,13 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             wishvel = wishvel.multiply(1F, 0F, 1F).add(0F, this.m_flClientMaxSpeed, 0F);
         }
         // Sinking after no other movement occurs
-        else if (!this.input.hasForwardMovement() && (0F == this.input.movementSideways) && !mv->m_flUpMove) {
+        else if (!this.input.hasForwardMovement() && (0F == this.input.movementSideways) && this.m_flUpMove == 0) {
             wishvel = wishvel.subtract(0F, convertUnitsSource2MC(60), 0F); // drift towards bottom
         } else {// Go straight up by upmove amount.
             // exaggerate upward movement along forward as well
             float upwardMovememnt = (float) (this.input.movementForward * forward.y * 2);
             upwardMovememnt = MathHelper.clamp( upwardMovememnt, 0.f, this.m_flClientMaxSpeed );
-            wishvel[2] += mv->m_flUpMove + upwardMovememnt;
+            wishvel.add(0F, this.m_flUpMove + upwardMovememnt, 0F);
         }
 
         // Copy it over and determine speed
@@ -849,7 +885,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
                     float stepDist = (float) (castPos.y - this.getPos().y);
                     this.m_outStepHeight += stepDist;
                     // walked up the step, so just keep result and exit
-                    this.setPos(castPos);
+                    this.setPos(castPos.x, castPos.y, castPos.z);
                     this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
                     return;
                 }
@@ -858,7 +894,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             // Try moving straight along out normal path.
             this.tryPlayerMove();
         } else {
-            if ( !this.getGroundEntity() ) {
+            if ( !this.onGround ) {
                 this.tryPlayerMove();
                 this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
                 return;
@@ -915,8 +951,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             // We need to account for standing on a moving ground object in that case in order to determine if we really
             //  are moving away from the object we are standing on at too rapid a speed.  Note that CheckJump already sets
             //  ground entity to NULL, so this wouldn't have any effect unless we are moving up rapidly not from the jump button.
-            CBaseEntity *ground = this.getGroundEntity();
-            if ( ground ) {
+            if (this.onGround) {
                 flGroundEntityVelZ = this.ground_getAbsVelocity().y;
                 bMovingUpRapidly = ( zvel - flGroundEntityVelZ ) > NON_JUMP_VELOCITY;
             }
@@ -953,7 +988,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
             }
             else
             {*/
-                this.setGroundEntity( &pm );  // Otherwise, point to index of ent under us.
+                this.onGround = true;  // Otherwise, point to index of ent under us.
             //}
 
             //Adrian: vehicle code handles for us.
@@ -961,7 +996,8 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
                 // If our gamematerial has changed, tell any player surface triggers that are watching
                 //IPhysicsSurfaceProps *physprops = MoveHelper()->GetSurfaceProps();
                 //surfacedata_t *pSurfaceProp = physprops->GetSurfaceData( pm.surface.surfaceProps );
-                /* uhh todo char cCurrGameMaterial = pSurfaceProp->game.material;
+                /* uhh I don't think there's a minecraft analog for this. Maybe soul sand.
+                char cCurrGameMaterial = pSurfaceProp->game.material;
                 if ( !player->GetGroundEntity() )
                 {
                     cCurrGameMaterial = 0;
@@ -1111,8 +1147,8 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
 
         wishvel = new Vec3d(smove * cosine - fmove * sine, 0, fmove * cosine + smove * sine); // Determine movement angles
 
-        CHandle< CBaseEntity > oldground;
-        oldground = this.getGroundEntity();
+        boolean oldground;
+        oldground = this.onGround;
 
 
         // Zero out z components of movement vectors
@@ -1144,7 +1180,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
        // wishvel[2] = 0;             // Zero out z part of velocity
 
         wishdir = wishvel.normalize(); // Determine maginitude of speed of move
-        wishspeed = wishvel.length();
+        wishspeed = (float) wishvel.length();
 
         //
         // Clamp to server defined max speed
@@ -1175,7 +1211,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         dest = this.getPos().add(this.getVelocity().x * this.deltaTime(), 0F, this.getVelocity().z * this.deltaTime());
 
         // first try moving directly to the next spot
-        TracePlayerBBox( mv->GetAbsOrigin(), dest, PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+        //TracePlayerBBox( mv->GetAbsOrigin(), dest, PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
 
         // If we made it all the way, then copy trace end as new player position.
         this.m_outWishVel = this.m_outWishVel.add(wishdir.multiply(wishspeed));
@@ -1193,7 +1229,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         }
 
         // Don't walk up stairs if not on ground.
-        if ( oldground == null && !this.touchingWater ) {
+        if ( !oldground && !this.touchingWater ) {
             // Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
             this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
             return;
@@ -1203,7 +1239,6 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         if ( this.m_flWaterJumpTime != 0) {
             // Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
             this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
-            VectorSubtract( mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity );
             return;
         }
 
@@ -1213,6 +1248,51 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
 
         this.stayOnGround();
+    }
+
+    @Unique
+    public float getAirSpeedCap() {
+        return 100000; // TODO determine
+    }
+
+    @Unique
+    public void airAccelerate(Vec3d wishdir, float wishspeed, float accel) {
+        int i;
+        float addspeed, accelspeed, currentspeed;
+        float wishspd;
+
+        wishspd = wishspeed;
+
+        if (this.isRemoved())
+            return;
+
+        if (this.m_flWaterJumpTime != 0)
+            return;
+
+        // Cap speed
+        if ( wishspd > this.getAirSpeedCap() )
+            wishspd = this.getAirSpeedCap();
+
+        // Determine veer amount
+        currentspeed = (float) this.getVelocity().dotProduct(wishdir);
+
+        // See how much to add
+        addspeed = wishspd - currentspeed;
+
+        // If not adding any, done.
+        if (addspeed <= 0)
+            return;
+
+        // Determine acceleration speed after acceleration
+        accelspeed = accel * wishspeed * this.deltaTime() * this.player_m_surfaceFriction;
+
+        // Cap it
+        if (accelspeed > addspeed)
+            accelspeed = addspeed;
+
+        // Adjust pmove vel.
+        this.setVelocity(this.getVelocity().add(wishdir.multiply(accelspeed)));
+        this.m_outWishVel = this.m_outWishVel.add(wishdir.multiply(accelspeed));
     }
 
     @Unique
@@ -1235,7 +1315,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         wishvel = new Vec3d(smove * cosine - fmove * sine, 0, fmove * cosine + smove * sine); // Determine movement angles
 
         wishdir = wishvel.normalize(); // Determine maginitude of speed of move
-        wishspeed = wishvel.length();
+        wishspeed = (float) wishvel.length();
 
         //
         // clamp to server defined max speed
