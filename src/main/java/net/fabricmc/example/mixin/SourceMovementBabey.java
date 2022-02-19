@@ -804,12 +804,19 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         float speed, newspeed, addspeed, accelspeed;
         Vec3d forward, right, up;
 
-        forward = new Vec3d(Math.sin(this.getYaw()), 0, Math.cos(this.getYaw())); // Determine movement angles
-
         //
         // user intentions
         //
-        wishvel = forward.multiply(this.input.movementForward).add(right.multiply(this.input.movementSideways));
+        // Copy movement amounts
+        float fmove = this.input.movementForward;//* Math.cos(this.getPitch() * 0.017453292F));
+        float smove = this.input.movementSideways;
+        //float umove = (float) (this.input.movementForward * -Math.sin(this.getPitch() * 0.017453292F));
+
+        // Convert basis from forward-facing to absolute
+        float sine = MathHelper.sin(this.getYaw() * 0.017453292F);
+        float cosine = MathHelper.cos(this.getYaw() * 0.017453292F);
+
+        wishvel = new Vec3d(smove * cosine - fmove * sine, 0, fmove * cosine + smove * sine);
 
         // if we have the jump key down, move us up as well
         if (this.input.jumping) {
@@ -959,7 +966,7 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
 
         // Was on ground, but now suddenly am not
         if ( bMovingUpRapidly || ( bMovingUp && this.isClimbing() ) ) {
-            this.setGroundEntity(null);
+            this.onGround = false;
         } else {
             // Try and move down.
             Box box = this.getBoundingBox();
@@ -1248,6 +1255,90 @@ public abstract class SourceMovementBabey extends AbstractClientPlayerEntity {
         this.setVelocity(this.getVelocity().subtract(this.getBaseVelocity()));
 
         this.stayOnGround();
+    }
+
+    @Unique
+    public void onJump(double d) {
+        // TODO determine
+    }
+
+    @Unique
+    public void stepMove(Vec3d vecDestination) {
+
+        Vec3d vecEndPos = vecDestination;
+
+        // Try sliding forward both on ground and up 16 pixels
+        //  take the move that goes farthest
+        Vec3d vecPos = this.getPos();
+        Vec3d vecVel = this.getVelocity();
+
+        // Slide move down.
+        this.tryPlayerMove( vecEndPos, trace );
+
+        // Down results.
+        Vec3d vecDownPos = this.getPos();
+        Vec3d vecDownVel = this.getVelocity();
+
+        // Reset original values.
+        this.setPos(vecPos.x, vecPos.y, vecPos.z);
+        this.setVelocity(vecVel.x, vecVel.y, vecVel.z);
+
+        // Move up a stair height.
+        vecEndPos = this.getPos();
+        if ( this.m_Local_m_bAllowAutoMovement ) {
+            vecEndPos = vecEndPos.add(0F, m_Local_m_flStepSize + DIST_EPSILON, 0F);
+        }
+
+        if ( !inBlockAtPoint(this.getPos()) && /*raycast stuff*/ ) {
+            this.setPosition(castPos);
+        }
+
+        // Slide move up.
+        this.tryPlayerMove();
+
+        // Move down a stair (attempt to).
+        vecEndPos = this.getPos();
+        if ( m_Local_m_bAllowAutoMovement ) {
+            vecEndPos = vecEndPos.subtract(0F, m_Local_m_flStepSize + DIST_EPSILON, 0F);
+        }
+
+        // If we are not on the ground any more then use the original movement attempt.
+        /* Impossible in Minecraft
+        if ( trace.plane.normal[2] < 0.7 )
+        {
+            mv->SetAbsOrigin( vecDownPos );
+            VectorCopy( vecDownVel, mv->m_vecVelocity );
+            float flStepDist = mv->GetAbsOrigin().z - vecPos.z;
+            if ( flStepDist > 0.0f )
+            {
+                mv->m_outStepHeight += flStepDist;
+            }
+            return;
+        }*/
+
+        // If the trace ended up in empty space, copy the end over to the origin.
+        if ( !inBlockAtPoint(this.getPos()) && !trace.allsolid ) {
+            this.setPos( trace.endpos );
+        }
+
+        // Copy this origin to up.
+        Vec3d vecUpPos = this.getPos();
+
+        // decide which one went farther
+        float flDownDist = (float) (( vecDownPos.x - vecPos.x ) * ( vecDownPos.x - vecPos.x ) + ( vecDownPos.z - vecPos.z ) * ( vecDownPos.z - vecPos.z ));
+        float flUpDist = (float) (( vecUpPos.x - vecPos.x ) * ( vecUpPos.x - vecPos.x ) + ( vecUpPos.z - vecPos.z ) * ( vecUpPos.z - vecPos.z ));
+        if ( flDownDist > flUpDist ) {
+            vecDownPos = this.getPos();
+            vecDownVel = this.getVelocity();
+        } else {
+            // copy z value from slide move
+            this.setVelocity(this.getVelocity().multiply(1F, 0F, 1F).add(0, vecDownVel.y, 0));
+        }
+
+        float flStepDist = (float) (this.getPos().y - vecPos.y);
+        if ( flStepDist > 0 ) {
+            this.m_outStepHeight += flStepDist;
+        }
     }
 
     @Unique
